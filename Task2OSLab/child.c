@@ -4,31 +4,43 @@
 #include<stdlib.h>
 #include<sys/wait.h>
 #include<string.h>
+#include<stdbool.h>
 
-volatile static int alarm_flag = 0;
+volatile static int alarm_timer = 0;
+//Very important : Volatile lets the compiler know that the variable may change due to an outside signal (SIGALRM)
+//If variable is not declared volatile then the compiler may assume that its value can only change from insturctions
+//withing this program.
 
 void alarm_handler(int sig){
-	alarm_flag = 1;
+	alarm_timer ++; //Equivalent to seconds elapsed as we set alarm every second.
+	return;
+}
+
+void set_alarm_handler(void){
+	//Initialise struct to empty.Otherwise garbage values in fields(sigaction,mask,flags,restorer).
+	//That would produce undefined behaviour :(
+	struct sigaction alarm_action = {};
+        alarm_action.sa_handler = alarm_handler;
+        sigaction(SIGALRM,&alarm_action,NULL);
+	return;
+}
+
+char* status_reader(char status){
+	return (status == 't') ? "open" : "closed";
 }
 
 int main(int argc,char *argv[]){
-	int child_id = (int) *argv[1]; //Probably ot working well.
+	char child_id = argv[1][0]; 
+	//The id of the child is passed as the first argument.
+	//The reason it is a char : It was embedded into the argv[1] string.
 	pid_t this_pid = getpid();
-	int secs = 0;
-	struct sigaction alarm_action;
-	alarm_action.sa_handler = alarm_handler;
-	sigaction(SIGALRM,&alarm_action,NULL);
-	kill(this_pid,SIGALRM);
-	while(1){
-		if(alarm_flag == 1){
-			printf("I am the child %d and my pid is %d.Seconds Elapsed %d\n",child_id,this_pid,secs);
-			alarm_flag = 0;
-			alarm(15);
+	set_alarm_handler();
+	while(true){
+		if(alarm_timer % 15 == 0){
+			printf("[ID=%c/PID=%d/TIME=%d] The gates are %c!\n",child_id,this_pid,alarm_timer,argv[2][0]);
 		}
-		else{
-			sleep(1);
-			secs++;
-		}
+		alarm(1);
+		pause();//Pausing the program till next alarm.
 	}
 	exit(0);
 }

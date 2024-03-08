@@ -4,28 +4,33 @@
 #include<stdlib.h>
 #include<sys/wait.h>
 #include<string.h>
+#include<stdbool.h>
 
 int how_many_children(int argc,char *argv[]){
+	//Error handling for user input is done here.
 	if (argc != 2 || argv[1] == NULL){
-		printf("Invalid Input.Use: ./a.out tftt...(any number of gates) "
-		"where 't':open gate and 'f':closed gate for each child process.\n");
+		//If more or less than one argument are given to the program we reject them.
+		printf("Invalid Input.Use: %s tftt...(any number of gates) "
+		"where 't':open gate and 'f':closed gate for each child process.\n",argv[0]);
 		return -1;
 	}
 	if(strspn(argv[1],"tf") != strlen(argv[1]) || strlen(argv[1]) == 0){
-		//strspn returns the span of the substring made up only of t,f, 
+		//strspn returns the span of the substring made up only of t,f.
+		//If the user gives some other character (e.g 'e' or '') we reject it.
 		printf("Invalid Input.Only characters allowed are 't' for open gate and 'f' for closed.\n");
 		return -1;
 	}
-	return strlen(argv[1]);
+	return strlen(argv[1]); //Number of children is the length of the given string.
 }
 
 int main(int argc,char *argv[]){
-	int status;
+	int status; //To access any child's status.
 	const int children = how_many_children(argc,argv);
 	if(children == -1){
 		return 1;
 	}
-	pid_t child_pid[children];
+	static pid_t child_pid[children];//Here the pids of the created children will be stored.
+	//Static decalaration is not mandatory but initialises to 0 which prevents garbage values in case of error.
 	pid_t father_pid = getpid();
 	for(int i = 0;i < children;i++){
 		int child_pid_now = fork();
@@ -34,8 +39,13 @@ int main(int argc,char *argv[]){
                 	exit(1);
 		}
 		if(child_pid_now == 0){
-			char id = (char) i; //Seems not to be working.Change ASAP.
-			char *argv_child[] = {"./childexec",&id,NULL};
+			//Child needs to know its id and its gate status which were given to the parent.
+			//We pass those as arguments into *argv[].
+			char id[2];
+			snprintf(id,2,"%d",i);
+			char gate_status[2];
+			snprintf(gate_status,2,"%c",argv[1][i]);
+			char *argv_child[] = {"./childexec",id,gate_status,NULL};
 			execv(argv_child[0],argv_child);
 		}
 		if(child_pid_now > 0){
@@ -44,8 +54,15 @@ int main(int argc,char *argv[]){
 			child_pid[i] = child_pid_now;
 		}
 	}
-	for(int i = 0;i < children;i++){	
-		waitpid(child_pid[i],&status,0);
-	}
+	while(true){
+		for(int i = 0;i < children;i++){
+			//Constantly check the status of each child.In case one child exits print the Exit code.
+			int status = 0;
+			if(status = waitpid(child_pid[i],&status,0) <= 0){
+				printf("Exit Code: %d\n",status);
+				return 1;
+			}
+		}
+	};
         return 0;
 }
