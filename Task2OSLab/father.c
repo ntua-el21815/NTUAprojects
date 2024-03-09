@@ -29,14 +29,15 @@ int main(int argc,char *argv[]){
 	if(children == -1){
 		return 1;
 	}
-	static pid_t child_pid[children];//Here the pids of the created children will be stored.
+	pid_t *child_pid = malloc(children * sizeof(pid_t));
+	//Here the pids of the created children will be stored.
 	//Static decalaration is not mandatory but initialises to 0 which prevents garbage values in case of error.
 	pid_t father_pid = getpid();
 	for(int i = 0;i < children;i++){
 		int child_pid_now = fork();
 		if(child_pid_now < 0){
-                	perror("Error while creating child ");
-                	exit(1);
+                	perror("Error while creating child.");
+                	return 1;
 		}
 		if(child_pid_now == 0){
 			//Child needs to know its id and its gate status which were given to the parent.
@@ -46,10 +47,13 @@ int main(int argc,char *argv[]){
 			char gate_status[2];
 			snprintf(gate_status,2,"%c",argv[1][i]);
 			char *argv_child[] = {"./childexec",id,gate_status,NULL};
-			execv(argv_child[0],argv_child);
+			if(execv(argv_child[0],argv_child) == -1){
+				perror("Error while initiating child.");
+				return 1;
+			}
 		}
 		if(child_pid_now > 0){
-		       	printf("[PARENT/PID=%d] Created child %d (PID=%d) and intial state %c\n"
+		       	printf("[PARENT/PID=%d] Created child %d (PID=%d) and intial state '%c'\n"
                 	,father_pid,i,child_pid_now,argv[1][i]);
 			child_pid[i] = child_pid_now;
 		}

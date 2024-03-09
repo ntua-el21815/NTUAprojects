@@ -6,8 +6,14 @@
 #include<string.h>
 #include<stdbool.h>
 
+#define OPEN "open"
+#define CLOSED "closed"
+
 volatile static int alarm_timer = 0;
-//Very important : Volatile lets the compiler know that the variable may change due to an outside signal (SIGALRM)
+volatile static sig_atomic_t usr1_flag = false;
+volatile static sig_atomic_t usr2_flag = false;
+//Very important : Volatile lets the compiler know that the variable may change due to an outside signal
+// (SIGALRM,SIGUSR1)
 //If variable is not declared volatile then the compiler may assume that its value can only change from insturctions
 //withing this program.
 
@@ -16,17 +22,31 @@ void alarm_handler(int sig){
 	return;
 }
 
-void set_alarm_handler(void){
-	//Initialise struct to empty.Otherwise garbage values in fields(sigaction,mask,flags,restorer).
-	//That would produce undefined behaviour :(
-	struct sigaction alarm_action = {};
-        alarm_action.sa_handler = alarm_handler;
-        sigaction(SIGALRM,&alarm_action,NULL);
+void usr1_handler(int sig){
+	usr1_flag = true;
 	return;
 }
 
+void usr2_handler(int sig){
+	usr2_flag = true;
+	return;
+}
+
+sig_atomic_t set_handler(int signal,void (*handler) (int)){
+	//Initialise struct to empty.Otherwise garbage values in fields(sigaction,mask,flags,restorer).
+	//That would produce undefined behaviour :(
+	struct sigaction action = {};
+        action.sa_handler = handler;
+        if(sigaction(signal,&action,NULL) == -1){
+		return false;	
+	}
+	return true;
+}
+
+
+
 char* status_reader(char status){
-	return (status == 't') ? "open" : "closed";
+	return (status == 't') ? OPEN : CLOSED;
 }
 
 int main(int argc,char *argv[]){
@@ -34,13 +54,35 @@ int main(int argc,char *argv[]){
 	//The id of the child is passed as the first argument.
 	//The reason it is a char : It was embedded into the argv[1] string.
 	pid_t this_pid = getpid();
-	set_alarm_handler();
+	char *gate_status = status_reader(argv[2][0]);
+	if(!set_handler(SIGALRM,alarm_handler)){
+		perror("Failed on setting alarm handler");
+		return 1;
+	}
+	if(!set_handler(SIGUSR1,usr1_handler)){
+                perror("Failed on setting alarm handler");
+                return 1;
+        }
+	if(!set_handler(SIGUSR2,usr2_handler)){
+                perror("Failed on setting alarm handler");
+                return 1;
+        }
 	while(true){
 		if(alarm_timer % 15 == 0){
-			printf("[ID=%c/PID=%d/TIME=%d] The gates are %c!\n",child_id,this_pid,alarm_timer,argv[2][0]);
+			printf("[ID=%c/PID=%d/TIME=%d] The gates are %s!\n"
+			,child_id,this_pid,alarm_timer,gate_status);
+		}
+		if(usr1_flag){
+			printf("[ID=%c/PID=%d/TIME=%d] The gates are %s!\n"
+                        ,child_id,this_pid,alarm_timer,gate_status);
+			usr1_flag = false;
+		}
+		if(usr2_flag){
+			gate_status = (gate_status == OPEN) ? CLOSED : OPEN;
+			usr2_flag = false;
 		}
 		alarm(1);
 		pause();//Pausing the program till next alarm.
 	}
-	exit(0);
+	return 0;
 }
