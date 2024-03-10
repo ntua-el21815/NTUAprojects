@@ -11,7 +11,9 @@ volatile static sig_atomic_t term_flag = false;
 volatile static sig_atomic_t child_flag = false;
 
 int how_many_children(int argc,char *argv[]){
-	//Error handling for user input is done here.
+	/*Use : Error handling for user input.Checks if argc and argv are as expected.
+	  Return Values : -1 if input is invalid | If input is valid the number of children (>0) is returned.
+	 */
 	if (argc != 2 || argv[1] == NULL){
 		//If more or less than one argument are given to the program we reject them.
 		printf("Invalid Input.Use: %s tftt...(any number of gates) "
@@ -28,6 +30,9 @@ int how_many_children(int argc,char *argv[]){
 }
 
 sig_atomic_t set_handler(int signal,void (*handler) (int)){
+	/* Use : Sets handler function for the given signal.Signal should be any of the available macros (e.g SIGUSR1).
+	   Return Values : false if setting the handler fails otherwise true. 
+	 */
         //Initialise struct to empty.Otherwise garbage values in fields(sigaction,mask,flags,restorer).
         //That would produce undefined behaviour :(
         struct sigaction action = {};
@@ -54,10 +59,17 @@ void child_handler(int sig){
 }
 
 int run_child(char *exec_path,int child_id,char gate_stat){
+	/* Use : The function accepts the path of the executable for the child process (string),the id of the child
+	   process and the status that the child's gate should have.
+	   Return Values : -1 if there is an error when calling execv | 0 return value should not be reached normally
+	   since execv takes control.
+	 */
 	char id[2];
 	snprintf(id,2,"%d",child_id);
 	char gate_status[2];
 	snprintf(gate_status,2,"%c",gate_stat);
+	//Child needs to know its id and its gate status which were given to the parent.
+        //We pass those as arguments into its *argv[] pointer array.
 	char *argv_child[] = {exec_path,id,gate_status,NULL};
 	if(execv(argv_child[0],argv_child) == -1){
 		perror("Error while initiating child.");
@@ -67,6 +79,11 @@ int run_child(char *exec_path,int child_id,char gate_stat){
 }
 
 int get_child_id(int pid,int children,int *child_pid){
+	/* Use : Looks for the id of the child based on its pid.Accepts as arguments the pid to look for,the number
+	   of children and the array of the pids of the children processes.
+	   Return Value : -1 if the id does not correspond to the given pid | Otherwise the id of the child with the
+	   given pid.
+	 */
 	for(int i = 0;i < children;i++){
 		if(child_pid[i] == pid) return i;
 	}
@@ -102,13 +119,13 @@ int main(int argc,char *argv[]){
                 	return 1;
 		}
 		if(child_pid_now == 0){
-			//Child needs to know its id and its gate status which were given to the parent.
-			//We pass those as arguments into *argv[].
+			//This code is executed only by the new child process.
 			if(run_child("./childexec",i,argv[1][i]) == -1){
 				return 1;		
 			}
 		}
 		if(child_pid_now > 0){
+			//This code is executed only by the parent process.
 		       	printf("[PARENT/PID=%d] Created child %d (PID=%d) and intial state '%c'\n"
                 	,father_pid,i,child_pid_now,argv[1][i]);
 			child_pid[i] = child_pid_now;
@@ -123,7 +140,7 @@ int main(int argc,char *argv[]){
 			usr1_flag = false;
 		}
 		if(term_flag){
-			//when SIGTERM is given terminate all children and then self terminate.
+			//When SIGTERM is given terminate all children and then self terminate.
 			for(int i = 0;i < children;i++){ 
 				kill(child_pid[i],SIGTERM);
 			}
@@ -132,7 +149,7 @@ int main(int argc,char *argv[]){
 			return 0;
 		}
 		if(child_flag){
-			pid_t child_terminated_pid = wait(&status);
+			pid_t child_terminated_pid = wait(&status); //Wait here retuns the pid of the killed child.
 			int child_id = get_child_id(child_terminated_pid,children,child_pid);
 			if(child_id == -1) {
 				//Serious error if we cannot find the child id that means tha the pid we got is garbage.
@@ -140,7 +157,10 @@ int main(int argc,char *argv[]){
 				return 1;
 			}
 			pid_t new_child_pid = fork();
-			if(new_child_pid == 0) run_child("./childexec",child_id,argv[1][child_id]);
+			if(new_child_pid == 0){
+				//This code is executed only by the new child process.
+				run_child("./childexec",child_id,argv[1][child_id]);
+			}
 			child_pid[child_id] = new_child_pid;
 			printf("[PARENT/PID=%d] Child %d with PID=%d exited\n"
 			,father_pid,child_id,child_terminated_pid);
@@ -157,6 +177,6 @@ int main(int argc,char *argv[]){
 			}
 		}
 		*/
-	};
+	}
         return 0;
 }

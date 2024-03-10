@@ -46,6 +46,7 @@ sig_atomic_t set_handler(int signal,void (*handler) (int)){
 
 
 char* status_reader(char status){
+	//Simple function that translates 't' to open and 'f' to closed.
 	return (status == 't') ? OPEN : CLOSED;
 }
 
