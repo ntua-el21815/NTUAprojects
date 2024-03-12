@@ -17,6 +17,10 @@ volatile static sig_atomic_t usr2_flag = false;
 //If variable is not declared volatile then the compiler may assume that its value can only change from insturctions
 //withing this program.
 
+void continue_handler(int sig){
+	return;
+}
+
 void alarm_handler(int sig){
 	alarm_timer ++; //Equivalent to seconds elapsed as we set alarm every second.
 	return;
@@ -51,30 +55,34 @@ char* status_reader(char status){
 }
 
 int main(int argc,char *argv[]){
-	char child_id = argv[1][0]; 
+	if(!set_handler(SIGCONT,continue_handler)){
+                perror("Failed on setting continue handler");
+                return 1;
+        }
+	if(!set_handler(SIGALRM,alarm_handler)){
+                perror("Failed on setting alarm handler");
+                return 1;
+        }
+        if(!set_handler(SIGUSR1,usr1_handler)){
+                perror("Failed on setting alarm handler");
+                return 1;
+        }
+        if(!set_handler(SIGUSR2,usr2_handler)){
+                perror("Failed on setting alarm handler");
+                return 1;
+        }
+	char* child_id = argv[1]; 
 	//The id of the child is passed as the first argument.
 	//The reason it is a char : It was embedded into the argv[1] string.
 	pid_t this_pid = getpid();
 	char *gate_status = status_reader(argv[2][0]);
-	if(!set_handler(SIGALRM,alarm_handler)){
-		perror("Failed on setting alarm handler");
-		return 1;
-	}
-	if(!set_handler(SIGUSR1,usr1_handler)){
-                perror("Failed on setting alarm handler");
-                return 1;
-        }
-	if(!set_handler(SIGUSR2,usr2_handler)){
-                perror("Failed on setting alarm handler");
-                return 1;
-        }
 	while(true){
 		if(alarm_timer % 15 == 0){
-			printf("[ID=%c/PID=%d/TIME=%d] The gates are %s!\n"
+			printf("[ID=%s/PID=%d/TIME=%d] The gates are %s!\n"
 			,child_id,this_pid,alarm_timer,gate_status);
 		}
 		if(usr1_flag){
-			printf("[ID=%c/PID=%d/TIME=%d] The gates are %s!\n"
+			printf("[ID=%s/PID=%d/TIME=%d] The gates are %s!\n"
                         ,child_id,this_pid,alarm_timer,gate_status);
 			usr1_flag = false;
 		}
