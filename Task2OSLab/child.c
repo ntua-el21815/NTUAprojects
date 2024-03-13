@@ -17,6 +17,9 @@ volatile static sig_atomic_t usr2_flag = false;
 //If variable is not declared volatile then the compiler may assume that its value can only change from insturctions
 //withing this program.
 
+void term_handler(int sig){
+	exit(0);
+}
 void continue_handler(int sig){
 	return;
 }
@@ -56,19 +59,23 @@ char* status_reader(char status){
 
 int main(int argc,char *argv[]){
 	if(!set_handler(SIGCONT,continue_handler)){
-                perror("Failed on setting continue handler");
+                perror("Failed on setting SIGCONT handler");
                 return 1;
         }
 	if(!set_handler(SIGALRM,alarm_handler)){
-                perror("Failed on setting alarm handler");
+                perror("Failed on setting SIGALARM handler");
                 return 1;
         }
         if(!set_handler(SIGUSR1,usr1_handler)){
-                perror("Failed on setting alarm handler");
+                perror("Failed on setting SIGUSR1 handler");
                 return 1;
         }
         if(!set_handler(SIGUSR2,usr2_handler)){
-                perror("Failed on setting alarm handler");
+                perror("Failed on setting SIGUSR2 handler");
+                return 1;
+        }
+	if(!set_handler(SIGTERM,term_handler)){
+                perror("Failed on setting SIGALRM handler");
                 return 1;
         }
 	char* child_id = argv[1]; 
@@ -78,11 +85,11 @@ int main(int argc,char *argv[]){
 	char *gate_status = status_reader(argv[2][0]);
 	while(true){
 		if(alarm_timer % 15 == 0){
-			printf("[ID=%s/PID=%d/TIME=%d] The gates are %s!\n"
+			printf("[ID=%s/PID=%u/TIME=%d] The gates are %s!\n"
 			,child_id,this_pid,alarm_timer,gate_status);
 		}
 		if(usr1_flag){
-			printf("[ID=%s/PID=%d/TIME=%d] The gates are %s!\n"
+			printf("[ID=%s/PID=%du/TIME=%d] The gates are %s!\n"
                         ,child_id,this_pid,alarm_timer,gate_status);
 			usr1_flag = false;
 		}

@@ -117,17 +117,25 @@ int main(int argc,char *argv[]){
 		int child_pid_now = fork();
 		if(child_pid_now < 0){
                 	perror("Error while creating child.");
+			for(int j = 0;j < i;j++){
+				kill(child_pid[j],SIGTERM);
+			}
+			free(child_pid);
                 	exit(1);
 		}
 		if(child_pid_now == 0){
 			//This code is executed only by the new child process.
 			if(run_child("./childexec",i,argv[1][i]) == -1){
+				for(int j = 0;j < i;j++){
+                                	kill(child_pid[j],SIGTERM);
+                        	}
+                        	free(child_pid);
 				exit(1);		
 			}
 		}
 		if(child_pid_now > 0){
 			//This code is executed only by the parent process.
-		       	printf("[PARENT/PID=%d] Created child %d (PID=%d) and intial state '%c'\n"
+		       	printf("[PARENT/PID=%u] Created child %d (PID=%u) and intial state '%c'\n"
                 	,father_pid,i,child_pid_now,argv[1][i]);
 			child_pid[i] = child_pid_now;
 		}
@@ -143,15 +151,26 @@ int main(int argc,char *argv[]){
 		if(term_flag){
 			//When SIGTERM is given terminate all children and then self terminate.
 			for(int i = 0;i < children;i++){ 
+				printf("[PARENT/PID=%u] Waiting for %d children to exit\n",father_pid,children-i);
 				kill(child_pid[i],SIGTERM);
+				int status;
+				waitpid(child_pid[i],&status,WUNTRACED);//wait for the child to terminate.
+				while(!WIFEXITED(status)){
+					//If signal failed send again till child termminates.
+					kill(child_pid[i],SIGTERM);
+				}
+				printf("[PARENT/PID=%u] Child with PID=%u" 
+				" terminated successfully with exit status code %d!\n",father_pid,child_pid[i]
+				,WEXITSTATUS(status));
 			}
+			printf("[PARENT/PID=%u] All children exited, terminating as well.\n",father_pid);
 			term_flag = false;
-			int status;
-			waitpid(-1,&status,0); //Wait for all the children to terminate before self termination.
-			exit(0);
+			free(child_pid);
+			break;
 		}
 		if(child_flag){
 			//Wait here retuns the pid of the terminated or stopped child.
+			child_flag = false;
 			int wstatus;
 			pid_t affected_child_pid = waitpid(-1,&wstatus,WUNTRACED | WCONTINUED);
 			int child_id = get_child_id(affected_child_pid,children,child_pid);
@@ -163,6 +182,7 @@ int main(int argc,char *argv[]){
 				//Serious error if we cannot find the child id that means tha the pid we got is garbage.
 				printf("Some child died and couldn't be found.\n");
 				for(int i = 0;i < children;i++){                                                                                                kill(child_pid[i],SIGTERM);                                                                                     }
+				free(child_pid);
 				exit(1);
 			}
 			if(WIFSTOPPED(wstatus)){
@@ -175,18 +195,18 @@ int main(int argc,char *argv[]){
 				if(new_child_pid == 0){
 					//This code is executed only by the new child process.
 					if(run_child("./childexec",child_id,argv[1][child_id]) == -1){
-						return 1;
+						for(int i = 0;i < children;i++){                                                                                                kill(child_pid[i],SIGTERM);                                                                                     }
+						exit(1);
 					};
 					
 				}
 				child_pid[child_id] = new_child_pid;
-				printf("[PARENT/PID=%d] Child %d with PID=%d exited\n"
+				printf("[PARENT/PID=%u] Child %u with PID=%u exited\n"
 				,father_pid,child_id,affected_child_pid);
-				printf("[PARENT/PID=%d] Created new child for gate %d (PID=%d) and intial state '%c'\n"
+				printf("[PARENT/PID=%u] Created new child for gate %u (PID=%u) and intial state '%c'\n"
 				,father_pid,child_id,new_child_pid,argv[1][child_id]);
 			}
 		}
 	}
-	free(child_pid);
         return 0;
 }
