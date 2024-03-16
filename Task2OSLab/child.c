@@ -9,9 +9,9 @@
 #define OPEN "open"
 #define CLOSED "closed"
 
-volatile static int alarm_timer = 0;
-volatile static sig_atomic_t usr1_flag = false;
-volatile static sig_atomic_t usr2_flag = false;
+volatile int alarm_timer = 0;
+volatile sig_atomic_t usr1_flag = 0;
+volatile sig_atomic_t usr2_flag = 0;
 //Very important : Volatile lets the compiler know that the variable may change due to an outside signal
 // (SIGALRM,SIGUSR1)
 //If variable is not declared volatile then the compiler may assume that its value can only change from insturctions
@@ -30,12 +30,12 @@ void alarm_handler(int sig){
 }
 
 void usr1_handler(int sig){
-	usr1_flag = true;
+	usr1_flag = 1;
 	return;
 }
 
 void usr2_handler(int sig){
-	usr2_flag = true;
+	usr2_flag = 1;
 	return;
 }
 
@@ -89,16 +89,16 @@ int main(int argc,char *argv[]){
 			,child_id,this_pid,alarm_timer,gate_status);
 		}
 		if(usr1_flag){
-			printf("[ID=%s/PID=%du/TIME=%d] The gates are %s!\n"
+			printf("[ID=%s/PID=%u/TIME=%d] The gates are %s!\n"
                         ,child_id,this_pid,alarm_timer,gate_status);
-			usr1_flag = false;
+			usr1_flag = 0;
 		}
 		if(usr2_flag){
 			gate_status = (gate_status == OPEN) ? CLOSED : OPEN;
-			usr2_flag = false;
+			usr2_flag = 0;
 		}
 		alarm(1);
-		pause();//Pausing the program till next alarm.
+		pause();
 	}
 	return 0;
 }
