@@ -7,9 +7,11 @@
 #include<stdbool.h>
 
 /* Volatile makes sure that the compiler won't optimize the value of the flags as they may change from EXTERNAL signal.
- * sig_atomic_t An integer type which can be accessed as an atomic entity even in the presence of asynchronous           * interrupts made by signals. */
+ * sig_atomic_t An integer type which can be accessed as an atomic entity even in the presence of asynchronous           * interrupts made by signals.This means that the function call will not leave the memory in a bad state in case of
+ * sudden termination. */
 
 volatile sig_atomic_t usr1_flag = 0;
+volatile sig_atomic_t usr2_flag = 0;
 volatile sig_atomic_t term_flag = 0;
 volatile sig_atomic_t child_flag = 0;
 
@@ -51,6 +53,11 @@ void usr1_handler(int sig){
 	return;
 }
 
+void usr2_handler(int sig){
+        usr2_flag = 1;
+        return;
+}
+
 void term_handler(int sig){
 	term_flag = 1;
 	return;
@@ -68,7 +75,7 @@ int run_child(char *exec_path,int child_id,char gate_stat){
 	   since execv takes control.
 	 */
 	char *id = malloc(sizeof(child_id));
-	snprintf(id,sizeof(child_id),"%i",child_id);
+	snprintf(id,sizeof(id),"%d",child_id);
 	char gate_status[2];
 	snprintf(gate_status,2,"%c",gate_stat);
 	//Child needs to know its id and its gate status which were given to the parent.
@@ -93,6 +100,7 @@ int get_child_id(pid_t to_look_pid,int children,pid_t *child_pid){
 	return -1;
 }
 
+
 int main(int argc,char *argv[]){
 	if(!set_handler(SIGUSR1,usr1_handler)){
 		perror("Error while setting SIGUSR1 handler.");
@@ -106,19 +114,30 @@ int main(int argc,char *argv[]){
                 perror("Error while setting SIGCHLD handler.");
 		return 1;
         }
-	const int children = how_many_children(argc,argv);
+	if(!set_handler(SIGUSR2,usr2_handler)){
+                perror("Error while setting SIGUSR2 handler.");
+                return 1;
+        }
+	const int children = how_many_children(argc,argv); 
+	//Number of children should not change since we guarantee that n children will be running till parent exits.
 	if(children == -1){
 		return 1;
 	}
 	pid_t *child_pid = malloc(children * sizeof(pid_t));
+	if(child_pid == NULL){
+		perror("Failed to allocate memory.");
+		return 1;
+	}
 	//Here the pids of the created children will be stored.
 	pid_t father_pid = getpid();
 	for(int i = 0;i < children;i++){
+		//Creating the children one by one.
 		int child_pid_now = fork();
 		if(child_pid_now < 0){
                 	perror("Error while creating child.");
-			for(int j = 0;j < i;j++){
-				kill(child_pid[j],SIGTERM);
+			for(int j = 0;j < i ;j++){
+				//Making sure that if parent exits abnormally,there are no zombie children left.
+				kill(child_pid[j],SIGKILL);
 			}
 			free(child_pid);
                 	exit(1);
@@ -127,14 +146,14 @@ int main(int argc,char *argv[]){
 			//This code is executed only by the new child process.
 			if(run_child("./childexec",i,argv[1][i]) == -1){
 				for(int j = 0;j < i;j++){
-                                	kill(child_pid[j],SIGTERM);
-                        	}
-                        	free(child_pid);
+					kill(child_pid[j],SIGKILL);
+				}
+				kill(father_pid,SIGKILL);
 				exit(1);		
 			}
 		}
-		if(child_pid_now > 0){
-			//This code is executed only by the parent process.
+		if(child_pid_now > 0){		
+			//This code is executed only by the parent process.		
 		       	printf("[PARENT/PID=%u] Created child %d (PID=%u) and intial state '%c'\n"
                 	,father_pid,i,child_pid_now,argv[1][i]);
 			child_pid[i] = child_pid_now;
@@ -146,31 +165,43 @@ int main(int argc,char *argv[]){
 			for(int i = 0;i < children;i++){ 
 				kill(child_pid[i],SIGUSR1);
 			}
-			usr1_flag = false;
+			usr1_flag = 0;
 		}
+		if(usr2_flag){
+                        //When SIGUSR2 is given send same siganl to all children.
+                        for(int i = 0;i < children;i++){
+                                kill(child_pid[i],SIGUSR2);
+                        }
+                        usr2_flag = 0;
+                }
 		if(term_flag){
 			//When SIGTERM is given terminate all children and then self terminate.
+			term_flag = 0;
 			for(int i = 0;i < children;i++){ 
 				printf("[PARENT/PID=%u] Waiting for %d children to exit\n",father_pid,children-i);
-				kill(child_pid[i],SIGTERM);
+				if(kill(child_pid[i],SIGTERM) == -1){
+					perror("Error while terminating child.Retrying.");
+				}
 				int status;
 				waitpid(child_pid[i],&status,WUNTRACED);//wait for the child to terminate.
 				while(!WIFEXITED(status)){
-					//If signal failed send again till child termminates.
-					kill(child_pid[i],SIGTERM);
+					//If signal failed send SIGKILL till child termminates.
+					//SIGKILL is guaranteed to kill the process.
+					//Call waitpid again to update the status.
+					//This while loop ensures that the child will be killed.
+					kill(child_pid[i],SIGKILL);
+					waitpid(child_pid[i],&status,WUNTRACED);
 				}
 				printf("[PARENT/PID=%u] Child with PID=%u" 
 				" terminated successfully with exit status code %d!\n",father_pid,child_pid[i]
 				,WEXITSTATUS(status));
 			}
 			printf("[PARENT/PID=%u] All children exited, terminating as well.\n",father_pid);
-			term_flag = false;
 			free(child_pid);
 			break;
 		}
 		if(child_flag){
-			//Wait here retuns the pid of the terminated or stopped child.
-			child_flag = false;
+			child_flag = 0;
 			int wstatus;
 			pid_t affected_child_pid = waitpid(-1,&wstatus,WUNTRACED | WCONTINUED);
 			int child_id = get_child_id(affected_child_pid,children,child_pid);
@@ -181,21 +212,29 @@ int main(int argc,char *argv[]){
 			if(child_id == -1) {
 				//Serious error if we cannot find the child id that means tha the pid we got is garbage.
 				printf("Some child died and couldn't be found.\n");
-				for(int i = 0;i < children;i++){                                                                                                kill(child_pid[i],SIGTERM);                                                                                     }
+				for(int i = 0;i < children;i++){
+					//Making sure that if parent exits abnormally,there are no zombie children left.
+					kill(child_pid[i],SIGKILL);                                                                                     }
 				free(child_pid);
 				exit(1);
 			}
 			if(WIFSTOPPED(wstatus)){
+				//This block is executed if any child process stops due to outside signal.
 				printf("[PARENT/PID=%u] Continued child %u (PID=%u) after stop signal\n"
 				,father_pid,child_id,affected_child_pid);
 				kill(affected_child_pid,SIGCONT);
 			}
 			if(WIFSIGNALED(wstatus) || WIFEXITED(wstatus)){
+				//This block is executed if the child exits due to an outside signal or if it exits
+				//normally via exit().
 				pid_t new_child_pid = fork();
 				if(new_child_pid == 0){
 					//This code is executed only by the new child process.
 					if(run_child("./childexec",child_id,argv[1][child_id]) == -1){
-						for(int i = 0;i < children;i++){                                                                                                kill(child_pid[i],SIGTERM);                                                                                     }
+						for(int i = 0;i < children;i++){    
+							kill(child_pid[i],SIGKILL);   
+						}
+						kill(father_pid,SIGKILL);
 						exit(1);
 					};
 					
