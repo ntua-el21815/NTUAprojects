@@ -9,7 +9,7 @@
 #define OPEN "open"
 #define CLOSED "closed"
 
-volatile int alarm_timer = 0;
+volatile sig_atomic_t alarm_timer = 0;
 volatile sig_atomic_t usr1_flag = 0;
 volatile sig_atomic_t usr2_flag = 0;
 //Very important : Volatile lets the compiler know that the variable may change due to an outside signal

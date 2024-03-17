@@ -74,9 +74,9 @@ int run_child(char *exec_path,int child_id,char gate_stat){
 	   Return Values : -1 if there is an error when calling execv | 0 return value should not be reached normally
 	   since execv takes control.
 	 */
-	char *id = malloc(sizeof(child_id));
+	char id[10];//We do not expect the child_id to have more than 10 digits.
 	snprintf(id,sizeof(id),"%d",child_id);
-	char gate_status[2];
+	char gate_status[2];//2 for the character and the null terminator.
 	snprintf(gate_status,2,"%c",gate_stat);
 	//Child needs to know its id and its gate status which were given to the parent.
         //We pass those as arguments into its *argv[] pointer array.
@@ -124,11 +124,11 @@ int main(int argc,char *argv[]){
 		return 1;
 	}
 	pid_t *child_pid = malloc(children * sizeof(pid_t));
+	//Here the pids of the created children will be stored.
 	if(child_pid == NULL){
 		perror("Failed to allocate memory.");
 		return 1;
 	}
-	//Here the pids of the created children will be stored.
 	pid_t father_pid = getpid();
 	for(int i = 0;i < children;i++){
 		//Creating the children one by one.
@@ -157,22 +157,22 @@ int main(int argc,char *argv[]){
 		       	printf("[PARENT/PID=%u] Created child %d (PID=%u) and intial state '%c'\n"
                 	,father_pid,i,child_pid_now,argv[1][i]);
 			child_pid[i] = child_pid_now;
-		}
+	}
 	}
 	while(true){
 		if(usr1_flag){
 			//When SIGUSR1 is given send same siganl to all children.
+			usr1_flag = 0;
 			for(int i = 0;i < children;i++){ 
 				kill(child_pid[i],SIGUSR1);
 			}
-			usr1_flag = 0;
 		}
 		if(usr2_flag){
+			usr2_flag = 0;
                         //When SIGUSR2 is given send same siganl to all children.
                         for(int i = 0;i < children;i++){
                                 kill(child_pid[i],SIGUSR2);
                         }
-                        usr2_flag = 0;
                 }
 		if(term_flag){
 			//When SIGTERM is given terminate all children and then self terminate.
@@ -183,14 +183,11 @@ int main(int argc,char *argv[]){
 					perror("Error while terminating child.Retrying.");
 				}
 				int status;
-				waitpid(child_pid[i],&status,WUNTRACED);//wait for the child to terminate.
-				while(!WIFEXITED(status)){
-					//If signal failed send SIGKILL till child termminates.
+				waitpid(child_pid[i],&status,0);//wait for the child to terminate.
+				if(!WIFEXITED(status)){
+					//If signal failed send SIGKILL for child to termminate.
 					//SIGKILL is guaranteed to kill the process.
-					//Call waitpid again to update the status.
-					//This while loop ensures that the child will be killed.
 					kill(child_pid[i],SIGKILL);
-					waitpid(child_pid[i],&status,WUNTRACED);
 				}
 				printf("[PARENT/PID=%u] Child with PID=%u" 
 				" terminated successfully with exit status code %d!\n",father_pid,child_pid[i]
@@ -198,7 +195,7 @@ int main(int argc,char *argv[]){
 			}
 			printf("[PARENT/PID=%u] All children exited, terminating as well.\n",father_pid);
 			free(child_pid);
-			break;
+			exit(0);
 		}
 		if(child_flag){
 			child_flag = 0;
@@ -239,7 +236,7 @@ int main(int argc,char *argv[]){
 					};
 					
 				}
-				child_pid[child_id] = new_child_pid;
+				child_pid[child_id] = new_child_pid;//Update the child's pid to that of the new child.
 				printf("[PARENT/PID=%u] Child %u with PID=%u exited\n"
 				,father_pid,child_id,affected_child_pid);
 				printf("[PARENT/PID=%u] Created new child for gate %u (PID=%u) and intial state '%c'\n"

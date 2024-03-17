@@ -3,13 +3,15 @@
 
 import os
 import subprocess as sp
+from time import *
 
 def main():
     monster_string : str = "ft" * 50000
     print("Monster string created")
     result = os.system("make compile")
     print("Make complete with result: ", result)
-    command = "./father " + monster_string
+    sleep(2)
+    command = "./gates " + monster_string
     sp.run(command, shell=True)
     return
 
