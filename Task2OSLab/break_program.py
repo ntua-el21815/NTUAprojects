@@ -10,7 +10,7 @@ def main():
     print("Monster string created")
     result = os.system("make compile")
     print("Make complete with result: ", result)
-    sleep(2)
+    input("Press Enter to break the program!")
     command = "./gates " + monster_string
     sp.run(command, shell=True)
     return
