@@ -5,6 +5,8 @@
 #include<sys/wait.h>
 #include<string.h>
 #include<stdbool.h>
+#include<time.h>
+#include<poll.h>
 
 
 enum schedule {RANDOM, ROUND_ROBIN};
