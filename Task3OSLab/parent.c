@@ -1,97 +1,36 @@
-#include<stdio.h>
-#include<unistd.h>
-#include<signal.h>
-#include<stdlib.h>
-#include<sys/wait.h>
-#include<string.h>
-#include<stdbool.h>
-
-enum schedule {RANDOM, ROUND_ROBIN};
-
-struct parser {
-    int num_of_children;
-    enum schedule scheduling_process;
-};
-
-struct parser input_parser(int argc, char* args[]) {
-	/* Use : Parses the input given by the user and checks if it is valid.
-	   Return Values : If the input is invalid the function returns a struct with -1 as the number of children.
-	   Otherwise it returns a struct with the number of children and the scheduling process.
-	*/
-    if (argc < 2) {
-        printf("Did not provide number of children. Usage: %s <nChildren> [--random] [--round-robin].\n", args[0]);
-        return (struct parser){-1, ROUND_ROBIN};
-    }
-    if (argc > 3) {
-        printf("Too many parameters given. Usage: %s <nChildren> [--random] [--round-robin].\n", args[0]);
-        return (struct parser){-1, ROUND_ROBIN};
-    }
-    int num_of_children = atoi(args[1]);
-    if (num_of_children == 0) {
-        printf("Number of children not valid. Usage: %s <nChildren> [--random] [--round-robin].\n", args[0]);
-        return (struct parser){-1, ROUND_ROBIN};
-    }
-    enum schedule scheduling_process = ROUND_ROBIN;
-    if (argc == 3) {
-		//Checks for the existence of flag that changes the scheduling process.
-        if (strcmp(args[2], "--random") == 0) {
-            scheduling_process = RANDOM;
-        }
-        else if (strcmp(args[2], "--round-robin") == 0) {
-            scheduling_process = ROUND_ROBIN;
-        }
-        else {
-            printf("Wrong flag given. Usage: %s <nChildren> [--random] [--round-robin].\n", args[0]);
-            return (struct parser){-1, ROUND_ROBIN};
-        }
-    }
-    return (struct parser){num_of_children, scheduling_process};
-}
-
-int run_child(char *exec_path,int child_id,char gate_stat){
-	/* Use : The function accepts the path of the executable for the child process (string),the id of the child
-	   process and the status that the child's gate should have.
-	   Return Values : -1 if there is an error when calling execv | 0 return value should not be reached normally
-	   since execv takes control.
-	 */
-	char *argv_child[] = {exec_path,NULL};
-	if(execv(argv_child[0],argv_child) == -1){
-		perror("Error while initiating child.");
-		return -1;
- 	}
-	return 0;
-}
-
-int get_child_id(pid_t to_look_pid,int children,pid_t *child_pid){
-	/* Use : Looks for the id of the child based on its pid.Accepts as arguments the pid to look for,the number
-	   of children and the array of the pids of the children processes.
-	   Return Value : -1 if the id does not correspond to the given pid | Otherwise the id of the child with the
-	   given pid.
-	 */
-	for(int i = 0;i < children;i++){
-		if(child_pid[i] == to_look_pid) return i;
-	}
-	return -1;
-}
-
+#include"tools.h"
 
 int main(int argc,char *argv[]){
+	//allocated_space array is used to store all pointers to dynamically allocated memory.
+	void** allocated_space = malloc(0);  
+	//Store the input from the user into a parser struct.Defined in tools.h.
 	struct parser input = input_parser(argc,argv);
-	if(input.num_of_children == -1){
-		return 1;
-	}
-	pid_t *child_pid = malloc(input.num_of_children * sizeof(pid_t));
-	//Here the pids of the created children will be stored.
-	if(child_pid == NULL){
-		perror("Failed to allocate memory.");
-		return 1;
-	}
+	int val;
+	//In child_pid the pids of the created children will be stored.
+	pid_t *child_pid = allocate_array(input.num_of_children * sizeof(pid_t),allocated_space);
 	pid_t parent_pid = getpid();
-
+        //Create one pipe for each child.
+    int** pipes = allocate_array(input.num_of_children * sizeof(int*),allocated_space);
+	if(input.num_of_children == -1){
+		//Parser failed.See definition of input_parser.
+		free_all(allocated_space);
+		return 1;
+	}
+	for(int i = 0;i < input.num_of_children;i++){
+		pipes[i] = allocate_array(2 * sizeof(int),allocated_space);
+	}
+	for(int i = 0;i < input.num_of_children;i++){
+		//Creating one pipe for each child.
+		if(pipe(pipes[i]) == -1){
+			perror("Failed to create pipe.");
+			free_all(allocated_space);
+			return 1;
+		}
+	}
 	printf("[PARENT/PID=%u] Parent process started.\n"
 	"Number of children to create: %d, scheduling process: %s.\n",
-	parent_pid,input.num_of_children,input.scheduling_process == RANDOM ? "random" : "round-robin");
-
+	parent_pid,input.num_of_children,
+	input.scheduling_process == RANDOM ? "random" : "round-robin");
 	for(int i = 0;i < input.num_of_children;i++){
 		//Creating the children one by one.
 		int child_pid_now = fork();
@@ -101,25 +40,44 @@ int main(int argc,char *argv[]){
 				//Making sure that if parent exits abnormally,there are no zombie children left.
 				kill(child_pid[j],SIGKILL);
 			}
-			free(child_pid);
+			free_all(allocated_space);
             exit(1);
 		}
 		if(child_pid_now == 0){
 			//This code is executed only by the new child process.
-			if(run_child("./childexec",i,argv[1][i]) == -1){
+			/*if(run_child("./childexec",i,argv[1][i]) == -1){
 				for(int j = 0;j < i;j++){
 					kill(child_pid[j],SIGKILL);
 				}
 				kill(parent_pid,SIGKILL);
 				exit(1);		
+			}*/
+			close(pipes[i][1]);
+			if(read(pipes[i][0],&val,sizeof(int)) == -1){
+				perror("Error while reading from pipe.");
+				close(pipes[i][0]);
+				exit(1);
 			}
+			printf("[CHILD/PID=%u] Starting Work.\n",getpid());
+			val --;
+			sleep(1);
+			printf("[CHILD/PID=%u] Finished Work.Result : %d \n",getpid(),val);
+			close(pipes[i][0]);
+			exit(0);
 		}
 		if(child_pid_now > 0){		
 			//This code is executed only by the parent process.		
-		       	printf("[PARENT/PID=%u] Created child %d (PID=%u).\n"
-                	,parent_pid,i,child_pid_now);
+			printf("[PARENT/PID=%u] Created child %d (PID=%u).\n"
+			,parent_pid,i,child_pid_now);
 			child_pid[i] = child_pid_now;
+			val = i;
+			printf("Parent writing to pipe...\n");
+			close(pipes[i][0]);
+			write(pipes[i][1],&val,sizeof(int));
+			close(pipes[i][1]);
+			waitpid(child_pid_now,NULL,0);
 		}
 	}
-        return 0;
+	free_all(allocated_space);
+    return 0;
 }
