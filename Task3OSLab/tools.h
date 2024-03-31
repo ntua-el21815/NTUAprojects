@@ -46,3 +46,5 @@ void free_all(void **space_used);
 	/* Use : Frees all the memory allocated using the allocate_array function.
 	   Return Value : None.
 	*/
+bool close_all_pipes(int** pipes,int** pipes2,int children);
+	

@@ -64,3 +64,13 @@ void free_all(void **space_used){
     }
     free(space_used);
 }
+
+bool close_all_pipes(int** pipes,int** pipes2,int children){
+    for(int i = 0;i < children;i++){
+        if(close(pipes[i][0]) == -1 || close(pipes2[i][1]) == -1){
+            perror("Error while closing pipes.");
+            return false;
+        }
+    }
+    return true;
+}
