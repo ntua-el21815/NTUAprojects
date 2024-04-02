@@ -74,3 +74,32 @@ bool close_all_pipes(int** pipes,int** pipes2,int children){
     }
     return true;
 }
+
+char* to_lower(char* str){
+    for(int i = 0;str[i] != '\0';i++){
+        if(str[i] >= 'A' && str[i] <= 'Z'){
+            str[i] = str[i] + 32;
+        }
+    }
+    return str;
+}
+
+bool quit(char* str){
+    char* quit_strings[3] = {"quit","exit","q"};
+    for(int i = 0;i < 3;i++){
+        if(strcmp(to_lower(str),quit_strings[i]) == 0){
+            return true;
+        }
+    }
+    return false;
+}
+
+bool kill_children(pid_t *child_pid,int children){
+    for(int i = 0;i < children;i++){
+        if(kill(child_pid[i],SIGKILL) == -1){
+            perror("Error while killing children.");
+            return false;
+        }
+    }
+    return true;
+}
