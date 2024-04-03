@@ -1,5 +1,24 @@
 #include"tools.h"
 
+char* choose_colour(int i){
+    switch(i){
+        case 0:
+            return RED;
+        case 1:
+            return GREEN;
+        case 2:
+            return YELLOW;
+        case 3:
+            return MAGENTA;
+        case 4:
+            return CYAN;
+        case 5:
+            return WHITE;
+        default:
+            return RESET;
+    }
+}
+
 struct parser input_parser(int argc, char* args[]) {
     if (argc < 2) {
         printf("Did not provide number of children. Usage: %s <nChildren> [--random] [--round-robin].\n", args[0]);

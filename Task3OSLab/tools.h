@@ -9,6 +9,26 @@
 #include<poll.h>
 #include<fcntl.h>
 
+//Colors for the output.
+#define RESET "\033[0m"
+#define RED "\033[31;1m"
+#define GREEN "\033[32m"
+#define YELLOW "\033[33m"
+#define BLUE "\033[34m"
+#define MAGENTA "\033[35m"
+#define CYAN "\033[36m"
+#define WHITE "\033[37m"
+#define GRAY "\033[38;1m"
+#define ORANGE "\033[38;5;208m"
+#define PINK "\033[38;5;13m"
+#define TURQUOISE "\033[38;5;45m"
+
+char* choose_colour(int i);
+	/* Use : Chooses a colour based on the id of the child.
+	   Return Value : The colour that corresponds to the id of the child.
+	*/
+
+//Maximum expected input and message size.
 #define MAX_INPUT 100
 
 //Just an enumeration of the scheduling processes.

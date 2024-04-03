@@ -26,7 +26,7 @@ int main(int argc,char *argv[]){
     
 	//pipes_fc will be used to send data from parent to child
 	//pipes_cf will be used to send data from child to parent
-    int** pipes_fc = allocate_array(input.num_of_children * sizeof(int*),allocated_space);
+	int** pipes_fc = allocate_array(input.num_of_children * sizeof(int*),allocated_space);
 	int** pipes_cf = allocate_array(input.num_of_children * sizeof(int*),allocated_space);
 
 	for(int i = 0;i < input.num_of_children;i++){
@@ -43,8 +43,8 @@ int main(int argc,char *argv[]){
 		}
 	}
 
-	printf("[Parent] [%d] Parent process started.\n"
-	"Number of children to create: %d, scheduling process: %s.\n",
+	printf(TURQUOISE "[Parent] [%d] Parent process started.\n"
+	"Number of children to create: %d, scheduling process: %s.\n" RESET,
 	parent_pid,input.num_of_children,
 	input.scheduling_process == RANDOM ? "random" : "round-robin");
 
@@ -58,10 +58,10 @@ int main(int argc,char *argv[]){
 				//Making sure that if parent exits abnormally,there are no zombie children left.
 				kill(child_pid[j],SIGKILL);
 			}
-
 			free_all(allocated_space);
             exit(1);
 		}
+
 		if(child_pid_now == 0){
 			//This code is executed only by the new child process.
 
@@ -75,32 +75,35 @@ int main(int argc,char *argv[]){
 			*/
 			if(close(pipes_fc[gIndex][1]) == -1 || close(pipes_cf[gIndex][0]) == -1){
 				perror("Error while closing pipe.");
-				close(pipes_fc[gIndex][0]);
 				exit(1);
 			}
 
 			while(true){
+				char* COLOUR = choose_colour(gIndex%6);
 				if(read(pipes_fc[gIndex][0],&val,sizeof(int)) == -1){
 					perror("Error while reading from pipe.");
-					close(pipes_fc[gIndex][0]);
-					exit(1);
+					continue;//Retry if there is an error.
 				}
-				
-				printf("[Child %d] [%d] Child received %d!\n", gIndex, getpid(), val);
+				printf("%s",COLOUR);
+				printf("[Child %d] [%d] Child received %d!\n" RESET, gIndex, getpid(), val);
 				//Message's only purpose is synchronization.
-				char* msg = "ready";
-				if(write(pipes_cf[gIndex][1],msg,strlen(msg) + 1) == -1){
+				//Every time a child has read the value it acknowledges.
+				char msg[strlen("ready") + 1];
+				strcpy(msg,"ready");
+				if(write(pipes_cf[gIndex][1],&msg,strlen(msg) + 1) == -1){
 					perror("Error while writing to pipe.");
-					close(pipes_cf[gIndex][1]);
-					exit(1);
+					continue;//Retry if there is an error.
 				}
 				val --;
 				sleep(10);
-				printf("[Child %d] [%d] Child Finished hard work, writing back %d\n",gIndex,getpid(),val);
-				if(write(pipes_cf[gIndex][1],&val,sizeof(int)) == -1){
+				//Converting to string to process at the parent's end.
+				char back[MAX_INPUT];
+				snprintf(back,MAX_INPUT,"%d",val);
+				printf("%s",COLOUR);
+				printf("[Child %d] [%d] Child Finished hard work, writing back %d\n" RESET,gIndex,getpid(),val);
+				if(write(pipes_cf[gIndex][1],&back,strlen(back) + 1) == -1){
 					perror("Error while writing to pipe.");
-					close(pipes_cf[gIndex][1]);
-					exit(1);
+					continue;//Retry if there is an error.
 				}
 			}
 
@@ -108,7 +111,7 @@ int main(int argc,char *argv[]){
 		}
 		if(child_pid_now > 0){		
 			//This code is executed only by the parent process.		
-			printf("[Parent] [%d] Created child %d (PID=%u).\n"
+			printf(TURQUOISE "[Parent] [%d] Created child %d (PID=%u).\n" RESET
 			,parent_pid,i,child_pid_now);
 			child_pid[i] = child_pid_now;
 			
@@ -122,6 +125,7 @@ int main(int argc,char *argv[]){
 	  MAX_INPUT defined in tools.h.
 	*/
 	int val;
+	char msg[MAX_INPUT];
 	int selected_child = 0;
 	char line[MAX_INPUT];
 	fcntl(0, F_SETFL, fcntl(0, F_GETFL) | O_NONBLOCK);
@@ -138,10 +142,10 @@ int main(int argc,char *argv[]){
 			return 1;
 		}
 	}
-	printf("[Parent] [%d] Type a number to send job to a child!\n",parent_pid);
+	printf(TURQUOISE "[Parent] [%d] Type a number to send job to a child!\n" RESET,parent_pid);
 	while(true){
 		while(true){
-			int input_length = read(0,line,100);
+			int input_length = read(0,line,MAX_INPUT);
 			if(input_length > 0){
 				line[input_length - 1] = '\0';
 				break;
@@ -149,44 +153,49 @@ int main(int argc,char *argv[]){
 			int ret = poll(poll_fds,input.num_of_children,100);
 			if(ret == -1){
 				perror("Error while polling.");
-				kill_children(child_pid,input.num_of_children);
-				free_all(allocated_space);
-				return 1;
+				//Retry if there is an error.Can always exit if needed.
+				continue;
 			}
 			for(int i = 0;i < input.num_of_children;i++){
 				if(poll_fds[i].revents & POLLIN){
-					read(pipes_cf[i][0],&val,sizeof(int));
-					printf("[Parent] [%d] Received %d from child %d.\n",parent_pid,val,i);
-					//Reprompt the user to send a job to a child.
-					printf("[Parent] [%d] Type a number to send job to a child!\n",parent_pid);
+					if(read(pipes_cf[i][0],&msg,MAX_INPUT) == -1){
+						perror("Error while reading from pipe.");
+						continue;
+					}
+					if(strcmp(msg,"ready") == 0){
+						printf(TURQUOISE "[Parent] [%d] Type a number to send job to a child!\n" RESET,parent_pid);
+					}
+					else{
+						printf(ORANGE "[Parent] [%d] Received %s from child %d.\n" RESET,parent_pid,msg,i);
+						//Reprompt the user to send a job to a child.
+						printf(TURQUOISE "[Parent] [%d] Type a number to send job to a child!\n" RESET,parent_pid);
+					}
 				}
 			}
 		}
 		if(quit(line)){
 			break;
 		}
+		if(strcmp(to_lower(line),"help") == 0){
+			printf(TURQUOISE "[Parent] [%d] Type a number to send job to a child!\n" RESET,parent_pid);
+			printf(TURQUOISE "[Parent] [%d] To exit type \"exit\".\n" RESET,parent_pid);
+			continue;
+		}
 		int to_send = atoi(line);
 		if(to_send == 0){
-			printf("[Parent] [%d] Invalid input.\n",parent_pid);
-			printf("[Parent] [%d] Type a number to send job to a child!\n",parent_pid);
+			printf(TURQUOISE "[Parent] [%d] Invalid input.\n" RESET,parent_pid);
+			printf(TURQUOISE "[Parent] [%d] Type a number to send job to a child!\n" __REGISTER_PREFIX__,parent_pid);
 			continue;
 		}
 		if(input.scheduling_process == RANDOM){
 			srand(time(NULL));
 			selected_child = rand() % input.num_of_children;
 		}
+		printf(PINK "[Parent] [%d] Assigned %d to child %d.\n" RESET,parent_pid,to_send,selected_child);
 		val = to_send;
 		write(pipes_fc[selected_child][1],&val,sizeof(int));
 		//Reprompt the user to send a job to a child.
-		char msg[strlen("ready") + 1];
-		read(pipes_cf[selected_child][0],msg,strlen("ready") + 1);
-		if (strcmp(msg, "ready") != 0) {
-			printf("Did not read ready from child.\n");
-			while(!kill_children(child_pid,input.num_of_children));
-			free_all(allocated_space);
-			return 1;
-		}
-		printf("[Parent] [%d] Type a number to send job to a child!\n",parent_pid);
+		printf(TURQUOISE "[Parent] [%d] Type a number to send job to a child!\n" RESET,parent_pid);
 		if(input.scheduling_process == ROUND_ROBIN){
 			selected_child = (selected_child + 1) % input.num_of_children;
 		}
@@ -194,7 +203,7 @@ int main(int argc,char *argv[]){
 	close_all_pipes(pipes_cf,pipes_fc,input.num_of_children);
 	//Kill all children.
 	while(!kill_children(child_pid,input.num_of_children));
-	waitpid(-1,NULL,0);
+	printf(TURQUOISE "[Parent] [%d] All children killed!\n" RESET,parent_pid);
 	free_all(allocated_space);
     return 0;
 }
