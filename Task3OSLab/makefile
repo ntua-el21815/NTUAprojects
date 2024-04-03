@@ -4,10 +4,10 @@ all:
 compile: compile_parent
 clean: clean_parent
 compile_parent: parent.c
-	@gcc parent.c tools.c -o parent
-	@echo "parent executable compiled succesfuly"
-	@echo "Type ./parent to run the program."
+	@gcc parent.c tools.c -o ask3
+	@echo "ask3 executable compiled succesfuly"
+	@echo "Type ./ask3 <nChildren> [--random] [--round-robin] to run the program."
 clean_parent:
-	@rm parent
-	@echo "parent executable deleted."
+	@rm ask3
+	@echo "ask3 executable deleted."
 	
