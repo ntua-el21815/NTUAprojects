@@ -10,6 +10,7 @@ int main(int argc,char *argv[]){
 	//allocated_space array is used to store all pointers to dynamically allocated memory.
 	//This is done so that all memory can be freed at the end of the program.
 	struct list* allocated_space = malloc(sizeof(struct list));
+	//Initialize the list.
 	allocated_space -> ptr = NULL;
 	allocated_space -> next = NULL;
 
@@ -89,9 +90,9 @@ int main(int argc,char *argv[]){
 				printf("%s",COLOUR);
 				printf("[Child %d] [%d] Child received %d!\n" RESET, gIndex, getpid(), val);
 				//Message's only purpose is synchronization.
-				//Every time a child has read the value it acknowledges.
-				char msg[strlen("ready") + 1];
-				strcpy(msg,"ready");
+				//Every time a child has read the value it acknowledges,so that the
+				//parent can repromt the user for input.
+				char msg[] = "ready";
 				if(write(pipes_cf[gIndex][1],&msg,strlen(msg) + 1) == -1){
 					perror("Error while writing to pipe.");
 					continue;//Retry if there is an error.
@@ -121,18 +122,26 @@ int main(int argc,char *argv[]){
 	}
 	
 	//Parent process code.
-	/*val stores the value sent by parent for processing.
+	/*
+	  TIMEOUT is the time polling time to get tha value back from children.
+	  val stores the value sent by parent for processing.
 	  selected_child is initialized to 0 for round-robin,else it is randomly selected.
+	  msg is used to store the message received from the child.
 	  line is used to store the input from the user.
 	  MAX_INPUT defined in tools.h.
 	*/
+	const int TIMEOUT = 100;
 	int val;
-	char msg[MAX_INPUT];
 	int selected_child = 0;
+	char msg[MAX_INPUT];
 	char line[MAX_INPUT];
-	//Setting stdin to non-blocking.So that the parent can continue
+	//Setting stdin to non blocking.So that the parent can continue
 	//without consantly waiting for input from the user.
-	fcntl(0, F_SETFL, fcntl(0, F_GETFL) | O_NONBLOCK);
+	if(set_stdin_nonblocking() == -1){
+		kill_children(child_pid,input.num_of_children);
+		free_all(allocated_space);
+		return 1;
+	}
 	struct pollfd *poll_fds = (struct pollfd *) allocate_array(input.num_of_children * sizeof(struct pollfd),allocated_space);
 	for(int i = 0;i < input.num_of_children;i++){
 		//Setting up polling for all the pipes.
@@ -149,13 +158,13 @@ int main(int argc,char *argv[]){
 	printf(TURQUOISE "[Parent] [%d] Type a number to send job to a child!\n" RESET,parent_pid);
 	while(true){
 		while(true){
-			int input_length = read(0,line,MAX_INPUT);
+			int input_length = read(STDIN_FILENO,line,MAX_INPUT);
 			if(input_length > 0){
 				//Replace the newline character with the null terminator.
 				line[input_length - 1] = '\0';
 				break;
 			}
-			int ret = poll(poll_fds,input.num_of_children,100);
+			int ret = poll(poll_fds,input.num_of_children,TIMEOUT);
 			if(ret == -1){
 				perror("Error while polling.Exit if error persists.");
 				//Retry if there is an error.Can always exit from parent if needed.
@@ -194,7 +203,7 @@ int main(int argc,char *argv[]){
 			continue;
 		}
 		int to_send = atoi(line);
-		strip(line);
+		strip(line); //Needed to remove any whitespace.Easier to check for "0".
 		if(to_send == 0 && strcmp(line,"0") != 0){
 			printf(TURQUOISE "[Parent] [%d] Invalid input.\n" RESET,parent_pid);
 			printf(TURQUOISE "[Parent] [%d] Type a number to send job to a child!\n" RESET,parent_pid);
@@ -215,11 +224,11 @@ int main(int argc,char *argv[]){
 		//Reprompt the user to send a job to a child.
 		printf(TURQUOISE "[Parent] [%d] Type a number to send job to a child!\n" RESET,parent_pid);
 		if(input.scheduling_process == ROUND_ROBIN){
+			//Select the next child in circular fashion.
 			selected_child = (selected_child + 1) % input.num_of_children;
 		}
 	}
 	close_all_pipes(pipes_cf,pipes_fc,input.num_of_children);
-	//Kill all children.
 	kill_children(child_pid,input.num_of_children);
 	printf(TURQUOISE "[Parent] [%d] All children killed!\n" RESET,parent_pid);
 	free_all(allocated_space);

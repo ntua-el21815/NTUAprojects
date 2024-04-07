@@ -24,13 +24,13 @@
 #define PINK "\033[38;5;13m"
 #define TURQUOISE "\033[38;5;45m"
 
+//Maximum expected input size.
+#define MAX_INPUT 100
+
 char* choose_colour(int i);
 	/* Use : Chooses a colour based on the id of the child.
 	   Return Value : The colour that corresponds to the id of the child.
 	*/
-
-//Maximum expected input and message size.
-#define MAX_INPUT 100
 
 //Just an enumeration of the scheduling processes.
 enum schedule {RANDOM, ROUND_ROBIN};
@@ -89,4 +89,8 @@ bool quitted(char* str);
 	*/
 void kill_children(pid_t *child_pid,int children);
 	/* Use : Kills all the children processes.
+	*/
+int set_stdin_nonblocking();
+	/* Use : Sets the stdin to non-blocking mode.
+	   Return Value : 0 if successful | -1 otherwise.
 	*/

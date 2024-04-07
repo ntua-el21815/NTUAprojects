@@ -67,8 +67,9 @@ int get_child_id(pid_t to_look_pid,int children,pid_t *child_pid){
 void* allocate_array(int size,struct list* space_used){
     //Allocating memory as asked.
     void* new_space = malloc(size);
-    //Remember to erase this line after debugging.
+    #ifdef DEBUG
     printf("New pointer allocated at %p.\n",new_space);
+    #endif
     if(new_space == NULL){
         perror("Error while allocating memory.");
         free_all(space_used);
@@ -94,17 +95,29 @@ void* allocate_array(int size,struct list* space_used){
 }
 
 void free_all(struct list* space_used){
+    #ifdef DEBUG
     int size_used = 0;
+    #endif
     for(int i = 0;space_used -> next != NULL;i++){
-        //Remember to erase this line after debugging.
+        #ifdef DEBUG
         printf(TURQUOISE "Freed ptr: %p\n" RESET,space_used -> ptr); 
         size_used += sizeof(space_used);
+        #endif
         struct list* temp = space_used;
         free(temp -> ptr);
         space_used = space_used -> next;
     }
-    //free(space_used);
+    if(space_used -> ptr != NULL){
+        #ifdef DEBUG
+        size_used += sizeof(space_used);
+        printf(TURQUOISE "Freed ptr: %p\n" RESET,space_used -> ptr); 
+        #endif
+        free(space_used -> ptr);
+    }
+    free(space_used);
+    #ifdef DEBUG
     printf("Storing ptrs needed %d bytes.\n",size_used);
+    #endif
 }
 
 bool close_all_pipes(int** pipes,int** pipes2,int children){
@@ -139,7 +152,24 @@ void kill_children(pid_t *child_pid,int children){
     for(int i = 0;i < children;i++){
         if(kill(child_pid[i],SIGKILL) == -1){
             printf("Error while killing child %d.\n",i);
-            perror("");
+            perror("Error :");
         }
     }
+}
+
+int set_stdin_nonblocking(){
+    //Getting current flags for stdin.
+    int flags = fcntl(STDIN_FILENO,F_GETFL,0);
+    if(flags == -1){
+        perror("Error while getting flags.");
+        return -1;
+    }
+    //Adding the non-blocking flag.
+    flags |= O_NONBLOCK;
+    //Setting the new flags.
+    if(fcntl(STDIN_FILENO,F_SETFL,flags) == -1){
+        perror("Error while setting flags.");
+        return -1;
+    }
+    return 0;
 }
