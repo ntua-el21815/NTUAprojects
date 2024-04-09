@@ -20,7 +20,7 @@ char* choose_colour(int i){
 }
 
 void strip(char* str){
-    int cutting_point = strcspn(str," \t\n ");
+    int cutting_point = strcspn(str,"\t\n ");
     str[cutting_point] = '\0';
 }
 

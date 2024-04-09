@@ -53,7 +53,7 @@ int main(int argc,char *argv[]){
 
 	for(int i = 0;i < input.num_of_children;i++){
 		//Creating the children one by one.
-		int child_pid_now = fork();
+		pid_t child_pid_now = fork();
 
 		if(child_pid_now < 0){
 			perror("Error while creating child.");
@@ -171,7 +171,8 @@ int main(int argc,char *argv[]){
 				continue;
 			}
 			for(int i = 0;i < input.num_of_children;i++){
-				if(poll_fds[i].revents & POLLIN){
+				bool child_sent_data = poll_fds[i].revents & POLLIN;
+				if(child_sent_data){
 					if(read(pipes_cf[i][0],&msg,MAX_INPUT) == -1){
 						perror("Error while reading from pipe.");
 						free_all(allocated_space);
