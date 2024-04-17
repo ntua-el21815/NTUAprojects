@@ -57,13 +57,6 @@ struct parser input_parser(int argc, char* args[]) {
     return (struct parser){num_of_children, scheduling_process};
 }
 
-int get_child_id(pid_t to_look_pid,int children,pid_t *child_pid){
-	for(int i = 0;i < children;i++){
-		if(child_pid[i] == to_look_pid) return i;
-	}
-	return -1;
-}
-
 void* allocate_array(int size,struct list* space_used){
     //Allocating memory as asked.
     void* new_space = malloc(size);

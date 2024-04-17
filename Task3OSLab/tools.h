@@ -33,7 +33,7 @@ char* choose_colour(int i);
 	*/
 
 //Just an enumeration of the scheduling processes.
-enum schedule {RANDOM, ROUND_ROBIN};
+enum schedule {RANDOM = 0, ROUND_ROBIN = 1};
 
 //Packing the input into a simple struct.
 struct parser {

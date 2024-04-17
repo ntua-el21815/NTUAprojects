@@ -7,7 +7,7 @@
 
 int main(int argc,char *argv[]){
 	
-	//allocated_space array is used to store all pointers to dynamically allocated memory.
+	//allocated_space linked list is used to store all pointers to dynamically allocated memory.
 	//This is done so that all memory can be freed at the end of the program.
 	struct list* allocated_space = malloc(sizeof(struct list));
 	//Initialize the list.
@@ -29,6 +29,7 @@ int main(int argc,char *argv[]){
     
 	//pipes_fc will be used to send data from parent to child
 	//pipes_cf will be used to send data from child to parent
+	//Those are ordinary pipes,so they are one way!
 	int** pipes_fc = (int**) allocate_array(input.num_of_children * sizeof(int*),allocated_space);
 	int** pipes_cf = (int**) allocate_array(input.num_of_children * sizeof(int*),allocated_space);
 
@@ -62,13 +63,14 @@ int main(int argc,char *argv[]){
 				kill(child_pid[j],SIGKILL);
 			}
 			free_all(allocated_space);
-            exit(1);
+            		exit(1);
 		}
 
 		if(child_pid_now == 0){
 			//This code is executed only by the new child process.
 
 			//val stores the value sent by parent for processing.
+			//gIndex is just the child's id (not pid).
 			int val;
 			int gIndex = i;
 
@@ -84,7 +86,7 @@ int main(int argc,char *argv[]){
 			while(true){
 				char* COLOUR = choose_colour(gIndex%6);
 				if(read(pipes_fc[gIndex][0],&val,sizeof(int)) == -1){
-					perror("Error while reading from pipe.");
+					perror("Error while reading from pipe.If it persists exit.");
 					continue;//Retry if there is an error.
 				}
 				printf("%s",COLOUR);
@@ -94,7 +96,7 @@ int main(int argc,char *argv[]){
 				//parent can repromt the user for input.
 				char msg[] = "ready";
 				if(write(pipes_cf[gIndex][1],&msg,strlen(msg) + 1) == -1){
-					perror("Error while writing to pipe.");
+					perror("Error while writing to pipe.If it persists exit.");
 					continue;//Retry if there is an error.
 				}
 				val --;
@@ -106,7 +108,7 @@ int main(int argc,char *argv[]){
 				printf("[Child %d] [%d] Child Finished hard work, writing back %s\n" RESET 
 				,gIndex,getpid(),back);
 				if(write(pipes_cf[gIndex][1],&back,strlen(back) + 1) == -1){
-					perror("Error while writing to pipe.");
+					perror("Error while writing to pipe.If it persists exit.");
 					continue;//Retry if there is an error.
 				}
 			}
@@ -123,12 +125,12 @@ int main(int argc,char *argv[]){
 	
 	//Parent process code.
 	/*
-	  TIMEOUT is the time polling time to get tha value back from children.
+	  TIMEOUT is the polling time,100ms was good in terms of latency.
 	  val stores the value sent by parent for processing.
-	  selected_child is initialized to 0 for round-robin,else it is randomly selected.
+	  selected_child is initialized to 0 for round-robin,otherwise it is randomly selected.
 	  msg is used to store the message received from the child.
-	  line is used to store the input from the user.
-	  MAX_INPUT defined in tools.h.
+	  line is used to store the input from the terminal,by the user.
+	  MAX_INPUT defined in tools.h (100).
 	*/
 	const int TIMEOUT = 100;
 	int val;
@@ -142,7 +144,8 @@ int main(int argc,char *argv[]){
 		free_all(allocated_space);
 		return 1;
 	}
-	struct pollfd *poll_fds = (struct pollfd *) allocate_array(input.num_of_children * sizeof(struct pollfd),allocated_space);
+	struct pollfd *poll_fds = (struct pollfd *) 
+	allocate_array(input.num_of_children * sizeof(struct pollfd),allocated_space);
 	for(int i = 0;i < input.num_of_children;i++){
 		//Setting up polling for all the pipes.
 		poll_fds[i].fd = pipes_cf[i][0];
@@ -161,13 +164,14 @@ int main(int argc,char *argv[]){
 			int input_length = read(STDIN_FILENO,line,MAX_INPUT);
 			if(input_length > 0){
 				//Replace the newline character with the null terminator.
+				//so that the string can be processed.
 				line[input_length - 1] = '\0';
 				break;
 			}
 			int ret = poll(poll_fds,input.num_of_children,TIMEOUT);
 			if(ret == -1){
 				perror("Error while polling.Exit if error persists.");
-				//Retry if there is an error.Can always exit from parent if needed.
+				//Retry if there is an error.Can always exit if needed.
 				continue;
 			}
 			for(int i = 0;i < input.num_of_children;i++){
@@ -180,7 +184,7 @@ int main(int argc,char *argv[]){
 						return 1;
 					}
 					if(strcmp(msg,"ready") == 0){
-						//Remprompting whilst waiting for the child to finish.
+						//Remprompting user whilst waiting for the child to finish.
 						printf(TURQUOISE "[Parent] [%d] Type a number to send job to a child!\n"
 						RESET,parent_pid);
 					}
@@ -203,6 +207,10 @@ int main(int argc,char *argv[]){
 			printf(TURQUOISE "[Parent] [%d] To exit type \"exit\".\n" RESET,parent_pid);
 			continue;
 		}
+		/*atoi causes confusion since it returns 0 on error.However if it is indeed an error 
+		  then the string line will not be "0".
+		  So we simply check for that to avoid reporting an error if zero is given.
+		*/
 		int to_send = atoi(line);
 		strip(line); //Needed to remove any whitespace.Easier to check for "0".
 		if(to_send == 0 && strcmp(line,"0") != 0){
@@ -211,7 +219,7 @@ int main(int argc,char *argv[]){
 			continue;
 		}
 		if(input.scheduling_process == RANDOM){
-			srand(time(NULL));
+			srand(time(NULL));//Using time as seed for good enough randomness.
 			selected_child = rand() % input.num_of_children;
 		}
 		printf(PINK "[Parent] [%d] Assigned %d to child %d.\n" RESET,parent_pid,to_send,selected_child);
