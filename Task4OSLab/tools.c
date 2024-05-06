@@ -58,73 +58,76 @@ struct parser input_parser(int argc, char* args[]) {
     return parsed;
 }
 
-void* allocate_array(int size,struct list* space_used){
-    //Allocating memory as asked.
-    void* new_space = malloc(size);
-    #ifdef DEBUG
-    printf("New pointer allocated at %p.\n",new_space);
-    #endif
-    if(new_space == NULL){
-        perror("Error while allocating memory.");
-        free_all(space_used);
-        exit(1);
-    }
-    if(space_used -> ptr == NULL){
-        //Initialising the first element of the list.
-        space_used -> ptr = new_space;
-        space_used -> next = NULL;
-        return new_space;
-    }
-    struct list* current = space_used;
-    while(current -> next != NULL){
-        current = current -> next;
-    }
-    //Storing the new pointer by malloc in a new node.
-    struct list* new_node = (struct list*) malloc(sizeof(struct list));
-    new_node -> ptr = new_space;
-    new_node -> next = NULL;
-    //Setting the next of the last node to the new node.
-    current -> next = new_node;
-    return new_space;
-}
-
-void free_all(struct list* space_used){
-    #ifdef DEBUG
-    int size_used = 0;
-    #endif
-    for(int i = 0;space_used -> next != NULL;i++){
-        #ifdef DEBUG
-        printf(TURQUOISE "Freed ptr: %p\n" RESET,space_used -> ptr); 
-        size_used += sizeof(space_used);
-        #endif
-        struct list* temp = space_used;
-        free(temp -> ptr);
-        space_used = space_used -> next;
-    }
-    if(space_used -> ptr != NULL){
-        #ifdef DEBUG
-        size_used += sizeof(space_used);
-        printf(TURQUOISE "Freed ptr: %p\n" RESET,space_used -> ptr); 
-        #endif
-        free(space_used -> ptr);
-    }
-    free(space_used);
-    #ifdef DEBUG
-    printf("Storing ptrs needed %d bytes.\n",size_used);
-    #endif
-}
-
-char* to_lower(char* str){
-    for(int i = 0;str[i] != '\0';i++){
-        str[i] = tolower(str[i]);
-    }
-    return str;
-}
-
 bool exited(char* str){
-    char* quit_string = "exit";
-    if (strcmp(to_lower(str),quit_string) == 0){
+    if (strcmp(str,"exit") == 0){
         return true;
     }
     return false;
+}
+
+void print_line(char* message){
+    printf("---------------------------\n");
+    printf(GREEN "Latest Event:\n");
+    printf("interval(%c)\n",message[0]);
+    const int ll_size = 4;
+    char* light_level = malloc(ll_size*sizeof(char));
+    for(int i = 2;i < 5;i++){
+        light_level[i-2] = message[i];
+    }
+    light_level[ll_size -1] = '\0';
+    const int temp_size = 5;
+    char* temperature = malloc(temp_size*sizeof(char));
+    for(int i = 6;i < 10;i++){
+        temperature[i-6] = message[i];
+    }
+    temperature[temp_size -1] = '\0';
+    const int unix_time_size = 11;
+    char* unix_time = malloc(unix_time_size*sizeof(char));
+    for(int i = 11;i < 21;i++){
+        unix_time[i-11] = message[i];
+    }
+    unix_time[unix_time_size -1] = '\0';
+    double temperture_int = (double)atoi(temperature) / 100;
+    //Only printing the first 2 decimal places.
+    printf("Temperature is: %.2f\n",temperture_int);
+    printf("Light Level is: %s\n",light_level);
+    //Using localtime to convert the unix time to human readable time.
+    time_t unix_time_int = atoi(unix_time);
+    struct tm* human_time = localtime(&unix_time_int);
+    char* time_to_print = asctime(human_time);
+    time_to_print[strlen(time_to_print) - 1] = '\0';
+    printf("Timestamp is: %s" RESET "\n",time_to_print);
+    free(light_level);
+    free(temperature);
+    free(unix_time);
+    return;
+}
+
+void print_response(char* message){
+    if(strcmp(message,"try again") == 0){
+        printf(RED "Try again.Wrong Command." RESET "\n");
+        return;
+    }
+    char* first_word = malloc(4*sizeof(char));
+    for(int i = 0;i < 3;i++){
+        first_word[i] = message[i];
+    }
+    first_word[3] = '\0';
+    if((strcmp(first_word,"get") == 0) && strlen(message) > 3){
+        printf(RED "Try again.Wrong Command." RESET "\n");
+        free(first_word);
+        return;
+    }
+    if(strcmp(first_word,"ack") == 0){
+        printf(GREEN "Response: '%s'" RESET "\n",message);
+        free(first_word);
+        return;
+    }
+    else{
+        printf(GREEN "Send verification code: '%s'" RESET "\n",message);
+        free(first_word);
+        return;
+    }
+    free(first_word);
+    return;
 }
